@@ -1,251 +1,210 @@
-"""
-Saral - Document Simplifier mobile app (Flet 1.0)
-
-Two screens in one page: Input (paste text, pick audience + language) and
-Result (simplified text, warnings, actions). Calls the Django backend's
-/api/simplify/ endpoint using httpx (async, non-blocking).
-
-BEFORE RUNNING: set API_BASE_URL below.
-- Testing on Android emulator, Django running on your PC:  http://10.0.2.2:8000
-- Testing on a real phone, same Wi-Fi as your PC:            http://<your-pc-lan-ip>:8000
-  (run Django with: python manage.py runserver 0.0.0.0:8000)
-- Once deployed to Render:                                   https://your-app.onrender.com
-"""
-import asyncio
-import httpx
 import flet as ft
 
-API_BASE_URL = "http://127.0.0.1:8000"  # <-- CHANGE THIS
+from services.api import SaralAPI
 
-AUDIENCE_OPTIONS = [
-    ("child", "Child"),
-    ("adult", "Adult"),
-    ("elderly", "Elderly"),
-    ("nonnative", "Non-native English speaker"),
-]
-
-LANGUAGE_OPTIONS = [
-    ("en", "English"),
-    ("Hindi", "Hindi"),
-    ("Marathi", "Marathi"),
-    ("Tamil", "Tamil"),
-    ("Spanish", "Spanish"),
-]
+from ui.documents import show_documents
+from ui.home import show_home
+from ui.login import show_login
+from ui.register import show_register
+from ui.simplify import show_simplify
+from ui.upload import show_upload
+from ui.theme import BACKGROUND
 
 
 def main(page: ft.Page):
-    page.title = "Saral - Document Simplifier"
-    page.padding = 20
+
+    page.title = "Saral"
+
+    page.bgcolor = BACKGROUND
+
+    page.padding = 0
+
     page.scroll = ft.ScrollMode.AUTO
-    page.bgcolor = ft.Colors.WHITE
 
-    # ---------- shared state ----------
-    state = {"loading": False}
-
-    # ---------- INPUT SCREEN CONTROLS ----------
-    doc_input = ft.TextField(
-        label="Paste your document text here",
-        multiline=True,
-        min_lines=8,
-        max_lines=14,
-        border_radius=12,
-        text_size=16,
+    page.horizontal_alignment = (
+        ft.CrossAxisAlignment.CENTER
     )
 
-    audience_dropdown = ft.Dropdown(
-        label="Explain it for",
-        value="adult",
-        options=[ft.dropdown.Option(key=k, text=v) for k, v in AUDIENCE_OPTIONS],
-        border_radius=12,
-    )
+    api = SaralAPI()
 
-    language_dropdown = ft.Dropdown(
-        label="Output language",
-        value="en",
-        options=[ft.dropdown.Option(key=k, text=v) for k, v in LANGUAGE_OPTIONS],
-        border_radius=12,
-    )
+    state = {
+        "user": None,
+    }
 
-    error_text = ft.Text(color=ft.Colors.RED_600, visible=False)
+    # =========================================================
+    # NAVIGATION
+    # =========================================================
 
-    progress_ring = ft.ProgressRing(visible=False, width=20, height=20, stroke_width=2)
+    def login_success(data):
 
-    simplify_button = ft.Button(
-        content=ft.Row(
-            [progress_ring, ft.Text("Simplify", size=16)],
-            alignment=ft.MainAxisAlignment.CENTER,
-            spacing=10,
-        ),
-        style=ft.ButtonStyle(
-            shape=ft.RoundedRectangleBorder(radius=12),
-            padding=ft.Padding.symmetric(vertical=18, horizontal=20),
-        ),
-        bgcolor=ft.Colors.BLUE_700,
-        color=ft.Colors.WHITE,
-    )
+        state["user"] = data["user"]
 
-    input_view = ft.Column(
-        [
-            ft.Text("Saral", size=32, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_900),
-            ft.Text(
-                "Paste any confusing document and get it explained simply.",
-                size=14,
-                color=ft.Colors.GREY_700,
-            ),
-            ft.Container(height=10),
-            doc_input,
-            ft.Row([audience_dropdown, language_dropdown], spacing=12),
-            error_text,
-            ft.Container(height=6),
-            simplify_button,
-        ],
-        spacing=14,
-    )
+        show_home_screen()
 
-    # ---------- RESULT SCREEN CONTAINER (filled dynamically) ----------
-    result_view = ft.Column(spacing=16, visible=False)
+    def register_success(data):
 
-    # ---------- helpers ----------
-    def set_loading(is_loading: bool):
-        state["loading"] = is_loading
-        progress_ring.visible = is_loading
-        simplify_button.disabled = is_loading
+        state["user"] = data["user"]
 
-    def show_error(message: str):
-        error_text.value = message
-        error_text.visible = True
+        show_home_screen()
 
-    def clear_error():
-        error_text.visible = False
-        error_text.value = ""
+    def show_login_screen():
 
-    def build_result_view(data: dict):
-        result_view.controls.clear()
-
-        result_view.controls.append(
-            ft.Row(
-                [
-                    ft.IconButton(icon=ft.Icons.ARROW_BACK, on_click=go_back_to_input),
-                    ft.Text("Result", size=24, weight=ft.FontWeight.BOLD),
-                ]
-            )
+        show_login(
+            page=page,
+            api=api,
+            on_success=login_success,
+            on_register=lambda e:
+                show_register_screen(),
         )
 
-        # Summary line - the headline takeaway
-        if data.get("summary_line"):
-            result_view.controls.append(
-                ft.Container(
-                    content=ft.Text(
-                        data["summary_line"],
-                        size=18,
-                        weight=ft.FontWeight.W_600,
-                        color=ft.Colors.BLUE_900,
-                    ),
-                    bgcolor=ft.Colors.BLUE_50,
-                    padding=16,
-                    border_radius=12,
-                )
-            )
+    def show_register_screen():
 
-        # Simplified explanation
-        result_view.controls.append(
+        show_register(
+            page=page,
+            api=api,
+            on_success=register_success,
+            on_back=lambda e:
+                show_login_screen(),
+        )
+
+    def show_home_screen():
+
+        show_home(
+            page=page,
+            user=state["user"],
+            on_upload=lambda e:
+                show_upload_screen(),
+            on_simplify=lambda e:
+                show_simplify_screen(),
+            on_documents=lambda e:
+                show_documents_screen(),
+            on_logout=lambda e:
+                logout(),
+        )
+
+    def show_upload_screen():
+
+        show_upload(
+            page=page,
+            api=api,
+            on_back=lambda e:
+                show_home_screen(),
+            on_result=lambda data:
+                show_document_result(data),
+        )
+
+    def show_simplify_screen():
+
+        show_simplify(
+            page=page,
+            api=api,
+            on_back=lambda e:
+                show_home_screen(),
+        )
+
+    def show_documents_screen():
+
+        show_documents(
+            page=page,
+            api=api,
+            on_back=lambda e:
+                show_home_screen(),
+        )
+
+    def show_document_result(data):
+
+        page.controls.clear()
+
+        document = data.get(
+            "document",
+            {},
+        )
+
+        filename = document.get(
+            "original_filename",
+            "Document",
+        )
+
+        extracted_length = data.get(
+            "text_length",
+            0,
+        )
+
+        page.add(
             ft.Container(
-                content=ft.Text(data.get("simplified", ""), size=16, color=ft.Colors.BLACK_87),
-                bgcolor=ft.Colors.GREY_100,
-                padding=16,
-                border_radius=12,
+                width=520,
+                padding=24,
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [
+                                ft.IconButton(
+                                    icon=ft.Icons.ARROW_BACK,
+                                    on_click=lambda e:
+                                        show_home_screen(),
+                                ),
+
+                                ft.Text(
+                                    "Document ready",
+                                    size=27,
+                                    weight=ft.FontWeight.BOLD,
+                                ),
+                            ]
+                        ),
+
+                        ft.Container(
+                            content=ft.Column(
+                                [
+                                    ft.Icon(
+                                        ft.Icons.CHECK_CIRCLE_OUTLINE,
+                                        size=55,
+                                        color="#16A34A",
+                                    ),
+
+                                    ft.Text(
+                                        filename,
+                                        size=19,
+                                        weight=ft.FontWeight.BOLD,
+                                    ),
+
+                                    ft.Text(
+                                        f"{extracted_length:,} characters extracted.",
+                                    ),
+
+                                    ft.Text(
+                                        "The document is ready for AI simplification.",
+                                    ),
+                                ],
+                                horizontal_alignment=(
+                                    ft.CrossAxisAlignment.CENTER
+                                ),
+                                spacing=10,
+                            ),
+                            bgcolor=ft.Colors.WHITE,
+                            border_radius=20,
+                            padding=25,
+                        ),
+                    ],
+                    spacing=16,
+                ),
             )
         )
 
-        # Warnings
-        warnings = data.get("warnings") or []
-        if warnings:
-            result_view.controls.append(
-                ft.Text("Warnings", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.RED_700)
-            )
-            for w in warnings:
-                result_view.controls.append(
-                    ft.Container(
-                        content=ft.Row(
-                            [ft.Text("\u26a0\ufe0f"), ft.Text(w, size=15, expand=True)],
-                            spacing=8,
-                        ),
-                        bgcolor=ft.Colors.RED_50,
-                        padding=12,
-                        border_radius=10,
-                    )
-                )
+        page.update()
 
-        # Actions
-        actions = data.get("actions") or []
-        if actions:
-            result_view.controls.append(
-                ft.Text("Actions to take", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_700)
-            )
-            for a in actions:
-                result_view.controls.append(
-                    ft.Container(
-                        content=ft.Row(
-                            [ft.Text("\u2705"), ft.Text(a, size=15, expand=True)],
-                            spacing=8,
-                        ),
-                        bgcolor=ft.Colors.GREEN_50,
-                        padding=12,
-                        border_radius=10,
-                    )
-                )
+    async def logout():
 
-        input_view.visible = False
-        result_view.visible = True
+        await api.logout()
 
-    def go_back_to_input(e=None):
-        result_view.visible = False
-        input_view.visible = True
+        state["user"] = None
 
-    # ---------- main action ----------
-    async def on_simplify_click(e):
-        clear_error()
+        show_login_screen()
 
-        text = (doc_input.value or "").strip()
-        if not text:
-            show_error("Please paste some text first.")
-            return
+    # =========================================================
+    # START
+    # =========================================================
 
-        set_loading(True)
-
-        try:
-            async with httpx.AsyncClient(timeout=40.0) as client:
-                response = await client.post(
-                    f"{API_BASE_URL}/api/simplify/",
-                    json={
-                        "text": text,
-                        "audience": audience_dropdown.value,
-                        "language": language_dropdown.value,
-                    },
-                )
-
-            if response.status_code == 200:
-                build_result_view(response.json())
-            else:
-                try:
-                    err_data = response.json()
-                    msg = err_data.get("error") or str(err_data)
-                except Exception:
-                    msg = f"Server error ({response.status_code})"
-                show_error(msg)
-
-        except httpx.ConnectError:
-            show_error("Could not connect to the server. Check API_BASE_URL and your network.")
-        except httpx.TimeoutException:
-            show_error("The request took too long. Please try again.")
-        except Exception as exc:
-            show_error(f"Unexpected error: {exc}")
-        finally:
-            set_loading(False)
-
-    simplify_button.on_click = on_simplify_click
-
-    page.add(input_view, result_view)
+    show_login_screen()
 
 
 if __name__ == "__main__":

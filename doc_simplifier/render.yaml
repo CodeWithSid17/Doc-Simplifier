@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: saral-api
+    runtime: python
+    rootDir: doc_simplifier
+
+    buildCommand: ./build.sh
+
+    startCommand: gunicorn doc_simplifier.wsgi:application
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: saral-postgres
+          property: connectionString
+
+      - key: SECRET_KEY
+        generateValue: true
+
+      - key: DEBUG
+        value: "False"
+
+      - key: ALLOWED_HOSTS
+        value: "saral-api.onrender.com"
+
+      - key: GROQ_API_KEY
+        sync: false
+
+      - key: GROQ_MODEL
+        value: "llama-3.3-70b-versatile"
+
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+
+databases:
+  - name: saral-postgres
+    databaseName: saral
+    user: saral
