@@ -16,7 +16,7 @@ class SaralAPI:
     def __init__(self, base_url: Optional[str] = None):
         self.base_url = (
             base_url
-            or os.environ.get("SARAL_API_URL", "http://127.0.0.1:8000")
+            or os.environ.get("SARAL_API_URL", "https://doc-simplifier.onrender.com")
         ).rstrip("/")
         self.token = None
 
