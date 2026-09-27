@@ -1,209 +1,144 @@
 import asyncio
-
 import flet as ft
 
 from .theme import (
     PRIMARY,
     TEXT,
     TEXT_SECONDARY,
-    WHITE,
+    ERROR,
     card,
-    primary_button,
+    page_shell,
 )
 
 
-def show_simplify(
-    page,
-    api,
-    on_back,
-):
-
+def show_simplify(page, api, on_back):
     page.controls.clear()
 
     text_input = ft.TextField(
-        label="Paste difficult text here",
+        hint_text="Paste a clause, paragraph, policy or any difficult text...",
         multiline=True,
         min_lines=10,
-        max_lines=16,
-        border_radius=14,
+        max_lines=18,
+        border_radius=18,
+        border_color="#E7E7EE",
+        focused_border_color=PRIMARY,
     )
-
-    result_area = ft.Column(
-        spacing=12
+    audience = ft.Dropdown(
+        label="Explain for",
+        value="adult",
+        options=[
+            ft.DropdownOption(key="adult", text="Everyday adult"),
+            ft.DropdownOption(key="child", text="10-year-old"),
+            ft.DropdownOption(key="elderly", text="Older reader"),
+            ft.DropdownOption(key="nonnative", text="Simple English"),
+        ],
     )
+    language = ft.Dropdown(
+        label="Language",
+        value="en",
+        options=[
+            ft.DropdownOption(key="en", text="English"),
+            ft.DropdownOption(key="Hindi", text="Hindi"),
+            ft.DropdownOption(key="Marathi", text="Marathi"),
+        ],
+    )
+    result = ft.Column(spacing=12)
+    button = ft.Button(content="Simplify with AI", width=240, height=52)
+    progress = ft.ProgressRing(visible=False)
 
-    async def simplify():
-
-        text = (
-            text_input.value or ""
-        ).strip()
-
+    async def run():
+        text = (text_input.value or "").strip()
         if not text:
-
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text(
-                    "Please enter some text."
-                )
-            )
-
+            page.snack_bar = ft.SnackBar(content=ft.Text("Paste some text first."))
             page.snack_bar.open = True
-
             page.update()
-
             return
 
         button.disabled = True
-
-        button.content = "Understanding..."
-
+        progress.visible = True
+        result.controls.clear()
         page.update()
 
         try:
-
-            status, data = (
-                await api.simplify(
-                    text=text
-                )
+            status, data = await api.simplify(
+                text=text,
+                audience=audience.value or "adult",
+                language=language.value or "en",
             )
-
             if status == 200:
-
-                result_area.controls.clear()
-
-                summary = data.get(
-                    "summary_line",
-                    "",
-                )
-
-                simplified = data.get(
-                    "simplified",
-                    "",
-                )
-
-                if summary:
-
-                    result_area.controls.append(
+                result.controls.extend(
+                    [
                         card(
                             ft.Column(
                                 [
-                                    ft.Text(
-                                        "In simple words",
-                                        size=17,
-                                        weight=ft.FontWeight.BOLD,
-                                        color=PRIMARY,
-                                    ),
-                                    ft.Text(
-                                        summary,
-                                        size=16,
-                                    ),
+                                    ft.Text("In one sentence", size=15, weight=ft.FontWeight.BOLD, color=PRIMARY),
+                                    ft.Text(data.get("summary_line", "No summary returned."), size=16),
                                 ],
-                                spacing=8,
+                                spacing=7,
+                            )
+                        ),
+                        card(
+                            ft.Column(
+                                [
+                                    ft.Text("Simple explanation", size=15, weight=ft.FontWeight.BOLD),
+                                    ft.Text(data.get("simplified", "No explanation returned."), size=15),
+                                ],
+                                spacing=7,
+                            )
+                        ),
+                    ]
+                )
+                if data.get("warnings"):
+                    result.controls.append(
+                        card(
+                            ft.Column(
+                                [
+                                    ft.Text("Pay attention", size=15, weight=ft.FontWeight.BOLD, color="#D97706"),
+                                    *[ft.Text(f"• {x}") for x in data["warnings"]],
+                                ],
+                                spacing=6,
                             )
                         )
                     )
-
-                result_area.controls.append(
-                    card(
-                        ft.Column(
-                            [
-                                ft.Text(
-                                    "Explanation",
-                                    size=17,
-                                    weight=ft.FontWeight.BOLD,
-                                ),
-                                ft.Text(
-                                    simplified,
-                                    size=16,
-                                ),
-                            ],
-                            spacing=8,
+                if data.get("actions"):
+                    result.controls.append(
+                        card(
+                            ft.Column(
+                                [
+                                    ft.Text("What you need to do", size=15, weight=ft.FontWeight.BOLD, color=PRIMARY),
+                                    *[ft.Text(f"• {x}") for x in data["actions"]],
+                                ],
+                                spacing=6,
+                            )
                         )
                     )
-                )
-
             else:
-
-                result_area.controls.clear()
-
-                result_area.controls.append(
-                    ft.Text(
-                        data.get(
-                            "error",
-                            "Unable to simplify text.",
-                        ),
-                        color="#DC2626",
-                    )
-                )
-
+                result.controls.append(ft.Text(data.get("error", "Unable to simplify text."), color=ERROR))
         except Exception:
-
-            result_area.controls.clear()
-
-            result_area.controls.append(
-                ft.Text(
-                    "Unable to connect to Saral.",
-                    color="#DC2626",
-                )
-            )
-
+            result.controls.append(ft.Text("Unable to connect to Saral.", color=ERROR))
         finally:
-
             button.disabled = False
-
-            button.content = "Simplify"
-
+            progress.visible = False
             page.update()
 
-    button = primary_button(
-        "Simplify",
-        lambda e: asyncio.create_task(
-            simplify()
-        ),
-        width=300,
-    )
+    button.on_click = lambda e: asyncio.create_task(run())
 
     page.add(
-        ft.Container(
-            width=520,
-            padding=24,
-            content=ft.Column(
+        page_shell(
+            ft.Column(
                 [
                     ft.Row(
                         [
-                            ft.IconButton(
-                                icon=ft.Icons.ARROW_BACK,
-                                on_click=on_back,
-                            ),
-
-                            ft.Text(
-                                "Paste text",
-                                size=27,
-                                weight=ft.FontWeight.BOLD,
-                                color=TEXT,
-                            ),
+                            ft.IconButton(icon=ft.Icons.ARROW_BACK, on_click=on_back),
+                            ft.Text("Simplify", size=28, weight=ft.FontWeight.BOLD, color=TEXT),
                         ]
                     ),
-
-                    ft.Text(
-                        "Paste difficult information and Saral will explain it simply.",
-                        color=TEXT_SECONDARY,
-                    ),
-
-                    card(
-                        ft.Column(
-                            [
-                                text_input,
-                                button,
-                            ],
-                            spacing=14,
-                        )
-                    ),
-
-                    result_area,
+                    ft.Text("Turn complicated language into something you can act on.", color=TEXT_SECONDARY),
+                    card(ft.Column([text_input, ft.Row([audience, language], spacing=10), button, progress], spacing=12)),
+                    result,
                 ],
                 spacing=14,
-            ),
+            )
         )
     )
-
     page.update()

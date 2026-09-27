@@ -1,319 +1,205 @@
 import asyncio
+import os
 import flet as ft
 
 from .theme import (
     PRIMARY,
     TEXT,
     TEXT_SECONDARY,
-    WHITE,
+    ERROR,
+    SUCCESS,
     card,
-    primary_button,
+    icon_box,
+    page_shell,
 )
 
 
-def show_upload(
-    page,
-    api,
-    on_back,
-    on_result,
-):
+SUPPORTED = ["pdf", "jpg", "jpeg", "png", "txt", "docx", "xlsx"]
 
+
+def show_upload(page, api, on_back, on_result):
     page.controls.clear()
 
-    status = ft.Text(
-        "PDF • JPG • PNG • TXT • DOCX • XLSX",
-        color=TEXT_SECONDARY,
-        text_align=ft.TextAlign.CENTER,
-    )
+    picker = ft.FilePicker()
+    selected = {"file": None}
 
-    progress = ft.ProgressRing(
-        visible=False,
-    )
+    file_name = ft.Text("No document selected", color=TEXT_SECONDARY, max_lines=1)
+    file_meta = ft.Text("Choose PDF, image, text, Word or Excel", size=12, color=TEXT_SECONDARY)
+    status = ft.Text("", color=TEXT_SECONDARY)
+    progress = ft.ProgressRing(visible=False, width=24, height=24)
+    choose_button = ft.Button(content="Choose document", width=260, height=52)
+    upload_button = ft.Button(content="Upload & understand", width=260, height=52, disabled=True)
 
-    file_picker = ft.FilePicker()
+    def set_status(text, color=TEXT_SECONDARY):
+        status.value = text
+        status.color = color
 
-    async def upload_selected_file(file):
-
-        progress.visible = True
-        choose_button.disabled = True
-
-        status.value = (
-            f"Uploading {file.name}..."
-        )
-
+    async def process_file(file):
+        selected["file"] = file
+        file_name.value = file.name
+        ext = os.path.splitext(file.name)[1].replace(".", "").upper()
+        size_mb = (file.size or 0) / (1024 * 1024)
+        file_meta.value = f"{ext or 'FILE'}  •  {size_mb:.2f} MB"
+        upload_button.disabled = False
+        set_status("Ready to upload.")
         page.update()
-
-        try:
-
-            if not file.path:
-
-                status.value = (
-                    "Unable to access the selected file."
-                )
-
-                return
-
-            upload_status, upload_data = (
-                await api.upload_document(
-                    file_path=file.path,
-                    file_name=file.name,
-                )
-            )
-
-            print(
-                "UPLOAD RESPONSE:",
-                upload_status,
-                upload_data,
-            )
-
-            if upload_status not in (200, 201):
-
-                status.value = (
-                    upload_data.get(
-                        "error",
-                        upload_data.get(
-                            "detail",
-                            "Upload failed.",
-                        ),
-                    )
-                )
-
-                return
-
-            document = upload_data.get(
-                "document"
-            )
-
-            if not document:
-
-                status.value = (
-                    "Server did not return a document."
-                )
-
-                return
-
-            document_id = document.get(
-                "id"
-            )
-
-            if not document_id:
-
-                status.value = (
-                    "Document ID missing."
-                )
-
-                return
-
-            status.value = (
-                "Reading document..."
-            )
-
-            page.update()
-
-            extract_status, extract_data = (
-                await api.extract_document(
-                    document_id
-                )
-            )
-
-            print(
-                "EXTRACT RESPONSE:",
-                extract_status,
-                extract_data,
-            )
-
-            if extract_status not in (200, 201):
-
-                status.value = (
-                    extract_data.get(
-                        "error",
-                        extract_data.get(
-                            "detail",
-                            "Document extraction failed.",
-                        ),
-                    )
-                )
-
-                return
-
-            status.value = (
-                "Document ready."
-            )
-
-            page.update()
-
-            on_result(
-                extract_data
-            )
-
-        except Exception as exc:
-
-            print(
-                "UPLOAD ERROR:",
-                repr(exc),
-            )
-
-            status.value = (
-                f"Upload failed: {exc}"
-            )
-
-        finally:
-
-            progress.visible = False
-            choose_button.disabled = False
-
-            page.update()
 
     async def choose_file():
-
-        status.value = (
-            "Choose a document..."
-        )
-
+        choose_button.disabled = True
+        set_status("Opening file picker...")
         page.update()
-
         try:
-
-            files = await file_picker.pick_files(
+            files = await picker.pick_files(
                 dialog_title="Choose a document",
                 allow_multiple=False,
                 file_type=ft.FilePickerFileType.CUSTOM,
-                allowed_extensions=[
-                    "pdf",
-                    "jpg",
-                    "jpeg",
-                    "png",
-                    "txt",
-                    "docx",
-                    "xlsx",
-                ],
+                allowed_extensions=SUPPORTED,
             )
+            if files:
+                await process_file(files[0])
+            else:
+                set_status("No document selected.")
+        except Exception as exc:
+            set_status(f"File picker error: {exc}", ERROR)
+        finally:
+            choose_button.disabled = False
+            page.update()
 
-            print(
-                "FILE PICKER RESULT:",
-                files,
-            )
+    async def upload():
+        file = selected["file"]
+        if not file or not file.path:
+            set_status("Please choose a document first.", ERROR)
+            page.update()
+            return
 
-            if not files:
+        choose_button.disabled = True
+        upload_button.disabled = True
+        progress.visible = True
+        set_status("Uploading document...")
+        page.update()
 
-                status.value = (
-                    "No document selected."
-                )
+        try:
+            upload_status, upload_data = await api.upload_document(file.path, file.name)
 
-                page.update()
-
+            if upload_status == 401:
+                set_status("Your session expired. Please sign in again.", ERROR)
                 return
 
-            selected_file = files[0]
+            if upload_status not in (200, 201):
+                set_status(
+                    api._message(
+                        type("Response", (), {"status_code": upload_status})(),
+                        upload_data,
+                    ),
+                    ERROR,
+                )
+                return
 
-            status.value = (
-                f"Selected: {selected_file.name}"
-            )
+            document = upload_data.get("document") or {}
+            document_id = document.get("id")
 
+            if not document_id:
+                set_status("The server did not return a document ID.", ERROR)
+                return
+
+            set_status("Reading your document...")
             page.update()
 
-            await upload_selected_file(
-                selected_file
-            )
+            extract_status, extract_data = await api.extract_document(document_id)
+
+            if extract_status == 401:
+                set_status("Your session expired. Please sign in again.", ERROR)
+                return
+
+            if extract_status not in (200, 201):
+                set_status(
+                    extract_data.get("error", "Document extraction failed."),
+                    ERROR,
+                )
+                return
+
+            set_status("Document understood successfully.", SUCCESS)
+            page.update()
+            await asyncio.sleep(0.25)
+            on_result(extract_data)
 
         except Exception as exc:
-
-            print(
-                "FILE PICKER ERROR:",
-                repr(exc),
-            )
-
-            status.value = (
-                f"File picker error: {exc}"
-            )
-
+            set_status(f"Unable to process this document: {exc}", ERROR)
+        finally:
+            progress.visible = False
+            choose_button.disabled = False
+            upload_button.disabled = selected["file"] is None
             page.update()
 
-    choose_button = primary_button(
-        "Choose document",
-        lambda e: asyncio.create_task(
-            choose_file()
-        ),
-        width=300,
-    )
+    choose_button.on_click = lambda e: asyncio.create_task(choose_file())
+    upload_button.on_click = lambda e: asyncio.create_task(upload())
 
-    # Flet 1.0 FilePicker is a service.
-    page.services.append(
-        file_picker
-    )
+    page.services.clear()
+    page.services.append(picker)
 
     page.add(
-        ft.Container(
-            width=520,
-            padding=24,
-            content=ft.Column(
+        page_shell(
+            ft.Column(
                 [
                     ft.Row(
                         [
-                            ft.IconButton(
-                                icon=ft.Icons.ARROW_BACK,
-                                tooltip="Back",
-                                on_click=on_back,
-                            ),
-
-                            ft.Text(
-                                "Upload document",
-                                size=27,
-                                weight=ft.FontWeight.BOLD,
-                                color=TEXT,
-                            ),
+                            ft.IconButton(icon=ft.Icons.ARROW_BACK, on_click=on_back),
+                            ft.Text("Upload", size=28, weight=ft.FontWeight.BOLD, color=TEXT),
                         ]
                     ),
-
                     ft.Text(
-                        "Choose a document and Saral will make it easier to understand.",
+                        "Upload once. Saral will read it, simplify it and prepare it for AI.",
                         color=TEXT_SECONDARY,
                     ),
 
                     card(
                         ft.Column(
                             [
-                                ft.Container(
-                                    content=ft.Icon(
-                                        ft.Icons.CLOUD_UPLOAD_OUTLINED,
-                                        size=60,
-                                        color=PRIMARY,
-                                    ),
-                                    width=100,
-                                    height=100,
-                                    bgcolor="#EFF6FF",
-                                    border_radius=26,
-                                    alignment=ft.Alignment.CENTER,
-                                ),
-
+                                icon_box(ft.Icons.CLOUD_UPLOAD_OUTLINED, size=68),
+                                ft.Text("Drop your document into Saral", size=19, weight=ft.FontWeight.BOLD),
                                 ft.Text(
-                                    "Upload a document",
-                                    size=21,
-                                    weight=ft.FontWeight.BOLD,
-                                ),
-
-                                ft.Text(
-                                    "PDF • JPG • PNG • TXT • DOCX • XLSX",
-                                    size=13,
+                                    "PDF  •  JPG  •  PNG  •  TXT  •  DOCX  •  XLSX",
+                                    size=12,
                                     color=TEXT_SECONDARY,
+                                    text_align=ft.TextAlign.CENTER,
                                 ),
-
                                 choose_button,
-
-                                progress,
-
-                                status,
                             ],
-                            spacing=14,
-                            horizontal_alignment=(
-                                ft.CrossAxisAlignment.CENTER
-                            ),
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=12,
+                        ),
+                        padding=28,
+                    ),
+
+                    card(
+                        ft.Column(
+                            [
+                                ft.Row(
+                                    [
+                                        icon_box(ft.Icons.DESCRIPTION_OUTLINED, size=48),
+                                        ft.Column(
+                                            [file_name, file_meta],
+                                            expand=True,
+                                            spacing=3,
+                                        ),
+                                    ],
+                                    spacing=12,
+                                ),
+                                upload_button,
+                                ft.Row([progress, status], spacing=10),
+                            ],
+                            spacing=12,
                         )
+                    ),
+
+                    ft.Text(
+                        "Maximum file size: 10 MB",
+                        size=11,
+                        color=TEXT_SECONDARY,
                     ),
                 ],
                 spacing=14,
-            ),
+            )
         )
     )
-
     page.update()

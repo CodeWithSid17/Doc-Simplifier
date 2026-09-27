@@ -8,39 +8,17 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-SECRET_KEY = os.environ.get(
-    "SECRET_KEY",
-    "django-insecure-change-this-in-production",
-)
-
+SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-change-this-in-production")
 DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.environ.get(
-        "ALLOWED_HOSTS",
-        "127.0.0.1,localhost",
-    ).split(",")
+    for host in os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
     if host.strip()
 ]
 
-
-# ============================================================
-# GROQ
-# ============================================================
-
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-
-GROQ_MODEL = os.environ.get(
-    "GROQ_MODEL",
-    "llama-3.3-70b-versatile",
-)
-
-
-# ============================================================
-# APPLICATIONS
-# ============================================================
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -49,66 +27,33 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
-
     "simplifier",
 ]
-
-
-# ============================================================
-# MIDDLEWARE
-# ============================================================
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-
     "corsheaders.middleware.CorsMiddleware",
-
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
-
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
-
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-
-# ============================================================
-# CORS
-# ============================================================
-
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
-    for origin in os.environ.get(
-        "CORS_ALLOWED_ORIGINS",
-        "",
-    ).split(",")
+    for origin in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
     if origin.strip()
 ]
-
-# Useful for local Flet/mobile development.
-# Keep this True initially if the mobile app needs to connect
-# from changing local origins.
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
 
-
-# ============================================================
-# URLS
-# ============================================================
-
 ROOT_URLCONF = "doc_simplifier.urls"
-
-
-# ============================================================
-# TEMPLATES
-# ============================================================
 
 TEMPLATES = [
     {
@@ -125,16 +70,9 @@ TEMPLATES = [
     },
 ]
 
-
 WSGI_APPLICATION = "doc_simplifier.wsgi.application"
 
-
-# ============================================================
-# DATABASE
-# ============================================================
-
 DATABASE_URL = os.environ.get("DATABASE_URL")
-
 if DATABASE_URL:
     DATABASES = {
         "default": dj_database_url.parse(
@@ -145,7 +83,6 @@ if DATABASE_URL:
         )
     }
 else:
-    # Local development fallback.
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -153,42 +90,12 @@ else:
         }
     }
 
-
-# ============================================================
-# AUTHENTICATION
-# ============================================================
-
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        "NAME": (
-            "django.contrib.auth.password_validation."
-            "UserAttributeSimilarityValidator"
-        ),
-    },
-    {
-        "NAME": (
-            "django.contrib.auth.password_validation."
-            "MinimumLengthValidator"
-        ),
-    },
-    {
-        "NAME": (
-            "django.contrib.auth.password_validation."
-            "CommonPasswordValidator"
-        ),
-    },
-    {
-        "NAME": (
-            "django.contrib.auth.password_validation."
-            "NumericPasswordValidator"
-        ),
-    },
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
-
-
-# ============================================================
-# DRF
-# ============================================================
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -200,66 +107,26 @@ REST_FRAMEWORK = {
     ],
 }
 
-
-# ============================================================
-# INTERNATIONALIZATION
-# ============================================================
-
 LANGUAGE_CODE = "en-us"
-
 TIME_ZONE = "UTC"
-
 USE_I18N = True
-
 USE_TZ = True
 
-
-# ============================================================
-# STATIC
-# ============================================================
-
 STATIC_URL = "/static/"
-
 STATIC_ROOT = BASE_DIR / "staticfiles"
-
-STATICFILES_STORAGE = (
-    "whitenoise.storage.CompressedManifestStaticFilesStorage"
-)
-
-
-# ============================================================
-# MEDIA
-# ============================================================
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
-
 MEDIA_ROOT = BASE_DIR / "media"
-
-
-# ============================================================
-# EMAIL
-# ============================================================
 
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND",
     "django.core.mail.backends.console.EmailBackend",
 )
 
-
-# ============================================================
-# SECURITY
-# ============================================================
-
 if not DEBUG:
-    SECURE_PROXY_SSL_HEADER = (
-        "HTTP_X_FORWARDED_PROTO",
-        "https",
-    )
-
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-
-    SECURE_SSL_REDIRECT = True
-
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

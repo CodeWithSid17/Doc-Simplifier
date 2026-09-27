@@ -1,12 +1,10 @@
 services:
   - type: web
     name: saral-api
-    runtime: python
+    runtime: docker
     rootDir: doc_simplifier
-
-    buildCommand: ./build.sh
-
-    startCommand: gunicorn doc_simplifier.wsgi:application
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health/
 
     envVars:
       - key: PYTHON_VERSION
